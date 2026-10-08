@@ -204,9 +204,14 @@
   top: 0;
   z-index: 30;
   border-bottom: 3px solid transparent;
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, margin-bottom 0.2s;
 }
+/* The compact header is 32px shorter. The margin keeps its footprint in the
+ * page the same, so the content below doesn't jump. Otherwise the browser's
+ * scroll anchoring moves the page by 32px, which drops it back under the
+ * threshold, and the header flickers between both sizes. */
 .header-bar.is-scrolled {
+  margin-bottom: 32px;
   background: var(--header-bg);
   backdrop-filter: blur(6px);
   border-bottom-color: var(--ink);
@@ -508,6 +513,9 @@
 @media (max-width: 900px) {
   .havel-header {
     height: 76px;
+  }
+  .header-bar.is-scrolled {
+    margin-bottom: 12px;
   }
   .brand-pear {
     height: 40px;
