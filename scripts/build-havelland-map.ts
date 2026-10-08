@@ -1,7 +1,8 @@
 /* Builds the pixel map of Landkreis Havelland used in the homepage hero.
  *
- * Pulls the district boundary, rivers, canals, lakes, forests, main railway
- * lines and town positions from OpenStreetMap, rasterises the areas into a
+ * Pulls the district boundary, rivers, canals, lakes, forests and town
+ * positions from OpenStreetMap, plus driving routes between
+ * the towns (OSRM on OpenStreetMap roads), rasterises the areas into a
  * grid of square "pixels" and writes ready-to-use SVG paths to
  * src/data/havelland-map.json.
  *
@@ -196,7 +197,7 @@ class Grid {
     }
 }
 
-/** Ramer–Douglas–Peucker, to keep the vector railway lines small. */
+/** Ramer–Douglas–Peucker, to keep the route lines small. */
 function simplify(points: Point[], tolerance: number): Point[] {
     if (points.length < 3) return points;
     const [ax, ay] = points[0];
@@ -216,6 +217,17 @@ function simplify(points: Point[], tolerance: number): Point[] {
     return [...simplify(points.slice(0, index + 1), tolerance).slice(0, -1), ...simplify(points.slice(index), tolerance)];
 }
 
+/** Driving route between two towns from the public OSRM demo server, which routes on OpenStreetMap roads. */
+async function drivingRoute(from: LatLon, to: LatLon): Promise<LatLon[]> {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    const data = await res.json();
+    if (data.code !== 'Ok') throw new Error(`OSRM: ${data.code} ${data.message ?? ''}`);
+    // The demo server allows about one request per second.
+    await new Promise((done) => setTimeout(done, 1100));
+    return (data.routes[0].geometry.coordinates as [number, number][]).map(([lon, lat]) => ({ lat, lon }));
+}
+
 async function main() {
     console.log('Fetching OpenStreetMap data…');
     const district = await cached('district', districtRings);
@@ -226,7 +238,6 @@ async function main() {
         overpass(`way["waterway"~"^(river|canal)$"](${BBOX});`),
     );
     const places = await cached('places', () => overpass(`node["place"~"^(city|town|village)$"](${BBOX});`));
-    const rail = await cached('rail', () => overpass(`way["railway"="rail"]["usage"="main"](${BBOX});`));
     let forest: OsmElement[] = [];
     try {
         forest = await cached('forest', () =>
@@ -262,20 +273,34 @@ async function main() {
     const inLand = (c: number, r: number) => land.get(c, r) === 1;
 
     const towns: Record<string, Point> = {};
+    const townCoords: Record<string, LatLon> = {};
     for (const el of places) {
         const id = TOWNS[el.tags?.name ?? ''];
         if (id && el.lat !== undefined && el.lon !== undefined && !towns[id]) {
+            townCoords[id] = { lat: el.lat, lon: el.lon };
             towns[id] = project({ lat: el.lat, lon: el.lon }).map((v) => Math.round(v * 10) / 10) as Point;
         }
     }
     const missing = Object.values(TOWNS).filter((id) => !towns[id]);
     if (missing.length) throw new Error(`Towns not found in OSM: ${missing.join(', ')}`);
 
-    const railPaths = rail
-        .filter((el) => el.geometry)
-        .map((el) => simplify(el.geometry!.map(project), 1.2))
-        .map((line) => `M${line.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L')}`)
-        .join('');
+    // Every pair of towns, so the tour can be reordered without rebuilding the map.
+    // Keyed "a|b" with the ids sorted; the line runs from a to b.
+    console.log('Routing between towns…');
+    const ids = Object.values(TOWNS).sort();
+    const roads: Record<string, { cells: string; line: string }> = {};
+    for (const [i, a] of ids.entries()) {
+        for (const b of ids.slice(i + 1)) {
+            const route = await cached(`road-${a}-${b}`, () => drivingRoute(townCoords[a], townCoords[b]));
+            const grid = new Grid();
+            grid.stroke(route.map(project));
+            const line = simplify(route.map(project), 1.5);
+            roads[`${a}|${b}`] = {
+                cells: grid.toPath(),
+                line: `M${line.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L')}`,
+            };
+        }
+    }
 
     const output = {
         attribution: '© OpenStreetMap contributors (ODbL)',
@@ -291,9 +316,9 @@ async function main() {
             forest: woods.toPath((c, r) => inLand(c, r) && woods.get(c, r) === 1 && !isWater(c, r)),
             canal: canals.toPath((c, r) => canals.get(c, r) === 1 && !isWater(c, r)),
             water: lakes.toPath(isWater),
-            rail: railPaths,
         },
         towns,
+        roads,
     };
     writeFileSync(OUTPUT, JSON.stringify(output, null, 2) + '\n');
     console.log(`Wrote ${OUTPUT} (${Math.round(JSON.stringify(output).length / 1024)} KB)`);

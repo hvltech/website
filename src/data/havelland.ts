@@ -68,18 +68,15 @@ export function townPoint(id: TownId): [number, number] {
   return map.towns[id] as [number, number];
 }
 
-/** The tour as one path through every stop, each leg gently arched. */
-export function tourPath(): string {
-  const points = tour.map((stop) => townPoint(stop.town));
-  return points.reduce((d, [x2, y2], i) => {
-    if (i === 0) return `M${x2} ${y2}`;
-    const [x1, y1] = points[i - 1];
-    const length = Math.hypot(x2 - x1, y2 - y1);
-    // Bow every leg the same way round, so return legs don't sit on top of outbound ones.
-    const cx = (x1 + x2) / 2 + ((y2 - y1) / length) * length * 0.16;
-    const cy = (y1 + y2) / 2 - ((x2 - x1) / length) * length * 0.16;
-    return `${d}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2} ${y2}`;
-  }, "");
+const roads = map.roads as Record<string, { cells: string; line: string }>;
+
+/** The driving route between two towns (precomputed from OpenStreetMap): the road as
+ * map pixels, plus a line from `from` to `to` for the reveal and the rider. */
+export function roadBetween(from: TownId, to: TownId): { cells: string; line: string } {
+  // Each pair is stored once, with the ids sorted and the line running from the first to the second.
+  if (from < to) return roads[`${from}|${to}`];
+  const { cells, line } = roads[`${to}|${from}`];
+  return { cells, line: `M${line.slice(1).split("L").reverse().join("L")}` };
 }
 
 /** Finds which Havelland town a Meetup event mentions, if any. */
