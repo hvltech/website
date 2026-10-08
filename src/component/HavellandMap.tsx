@@ -7,8 +7,8 @@ import {
   MAP_WIDTH,
   mapPaths,
   project,
+  roadBetween,
   tour,
-  tourPath,
   townPoint,
   towns,
   type TownId,
@@ -25,8 +25,6 @@ type HavellandMapProps = {
   links?: Partial<Record<TownId, { href: string; label: string }>>;
 };
 
-const route = tourPath();
-
 export default function HavellandMap({ label, nextStop, legend, hqLabel, motion, links = {} }: HavellandMapProps) {
   const id = useId().replace(/:/g, "");
   const svg = useRef<SVGSVGElement>(null);
@@ -34,6 +32,16 @@ export default function HavellandMap({ label, nextStop, legend, hqLabel, motion,
   const [havelX, havelY] = project([12.255, 52.7]);
   const [berlinX, berlinY] = project([13.255, 52.49]);
   const hq = towns.find((town) => town.id === HQ)!;
+  // Stops before the next dinner are done. With no dinner on Meetup yet, past months count as done.
+  const nextIndex = tour.findIndex((stop) => stop.town === nextStop);
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const done = nextIndex >= 0 ? nextIndex : tour.filter((stop) => stop.month < thisMonth).length;
+  // The roads driven so far, plus the one to the next dinner.
+  const legs = tour.slice(1, nextIndex >= 0 ? nextIndex + 1 : done).map((stop, i) => ({
+    ...roadBetween(tour[i].town, stop.town),
+    upcoming: i + 1 === nextIndex,
+  }));
+  const nextLeg = legs.find((leg) => leg.upcoming);
 
   useEffect(() => {
     if (motion) svg.current?.unpauseAnimations();
@@ -52,9 +60,10 @@ export default function HavellandMap({ label, nextStop, legend, hqLabel, motion,
         <pattern id={`${id}-dots`} width="15" height="15" patternUnits="userSpaceOnUse">
           <rect x="7" y="7" width="2" height="2" style={{ fill: "var(--map-dots)" }} />
         </pattern>
-        <path id={`${id}-route`} d={route} />
         <mask id={`${id}-reveal`} maskUnits="userSpaceOnUse">
-          <path d={route} className="route-reveal" pathLength={1} />
+          {legs.map((leg) => (
+            <path key={leg.line} d={leg.line} className="route-reveal" pathLength={1} />
+          ))}
         </mask>
       </defs>
 
@@ -68,7 +77,11 @@ export default function HavellandMap({ label, nextStop, legend, hqLabel, motion,
         <path d={mapPaths.canal} style={{ fill: "var(--map-canal)" }} />
         <path d={mapPaths.water} style={{ fill: "var(--map-water)" }} />
       </g>
-      <path className="map-rail" d={mapPaths.rail} />
+      <g mask={`url(#${id}-reveal)`} shapeRendering="crispEdges">
+        {legs.map((leg) => (
+          <path key={leg.cells} d={leg.cells} className={`map-road ${leg.upcoming ? "is-upcoming" : ""}`} />
+        ))}
+      </g>
 
       <text className="map-river-label" x={havelX} y={havelY}>
         Havel
@@ -94,35 +107,38 @@ export default function HavellandMap({ label, nextStop, legend, hqLabel, motion,
         </g>
       )}
 
-      <use href={`#${id}-route`} className="map-route" mask={`url(#${id}-reveal)`} />
-      <rect className="map-rider" x="-3.5" y="-3.5" width="7" height="7" shapeRendering="crispEdges">
-        <animateMotion dur="24s" begin="3s" repeatCount="indefinite">
-          <mpath href={`#${id}-route`} />
-        </animateMotion>
-      </rect>
+      {nextLeg && (
+        <rect className="map-rider" x="-3.5" y="-3.5" width="7" height="7" shapeRendering="crispEdges">
+          <animateMotion dur="6s" begin="2s" repeatCount="indefinite" path={nextLeg.line} />
+        </rect>
+      )}
 
       {tour.map((stop, index) => {
         if (stop.town === HQ) return null;
         const town = towns.find((t) => t.id === stop.town)!;
         const [x, y] = townPoint(stop.town);
         const isNext = stop.town === nextStop;
+        const isDone = index < done;
         const link = links[stop.town];
         const marker = (
           <g
-            className={`map-town ${isNext ? "is-next" : ""} ${town.minor && !isNext ? "is-minor" : ""}`}
+            className={`map-town ${isNext ? "is-next" : isDone ? "is-done" : "is-planned"} ${town.minor && !isNext ? "is-minor" : ""}`}
             style={{ animationDelay: `${1.2 + index * 0.14}s` }}
           >
-            <rect x="-8" y="-8" width="16" height="16" className="town-dot" shapeRendering="crispEdges" />
-            <text className="town-number" y="4.5" textAnchor="middle">
-              {index + 1}
-            </text>
-            <text x={town.label.dx} y={town.label.dy} textAnchor={town.label.anchor}>
-              {town.name}
-            </text>
-            {isNext && (
-              <g transform="translate(4 -6)">
-                <NextFlag />
-              </g>
+            {isNext ? (
+              <NextBadge name={town.name} x={x} />
+            ) : isDone ? (
+              <>
+                <rect x="-7" y="-7" width="14" height="14" className="town-dot" shapeRendering="crispEdges" />
+                <path className="town-check" d="M-5 0h3v2h2v-3h2v-3h3v3h-2v3h-2v3h-3v-3h-3z" shapeRendering="crispEdges" />
+              </>
+            ) : (
+              <rect x="-4" y="-4" width="8" height="8" className="town-dot" shapeRendering="crispEdges" />
+            )}
+            {!isNext && (
+              <text x={town.label.dx} y={town.label.dy} textAnchor={town.label.anchor}>
+                {town.name}
+              </text>
             )}
           </g>
         );
@@ -165,6 +181,29 @@ export default function HavellandMap({ label, nextStop, legend, hqLabel, motion,
         </g>
       </g>
     </svg>
+  );
+}
+
+/** The next stop: a pixel badge with the town name, pointing at the town, with the flag planted on top.
+ * `x` is the town's position, so the badge can stay inside the map near the edges. */
+function NextBadge({ name, x }: { name: string; x: number }) {
+  const width = Math.round(name.length * 9.6 + 20);
+  const left = Math.round(Math.min(Math.max(-width / 2, 6 - x), MAP_WIDTH - 6 - x - width));
+  const top = -48;
+  // Outline of badge and pointer in one path, so the pointer has no seam.
+  const outline = `M${left} ${top}h${width}v26H6l-6 8l-6-8H${left}z`;
+  return (
+    <g className="next-badge">
+      <rect x="-5" y="-5" width="10" height="10" className="town-dot" shapeRendering="crispEdges" />
+      <path d={outline} className="badge-shadow" transform="translate(3 3)" shapeRendering="crispEdges" />
+      <path d={outline} className="badge-plate" shapeRendering="crispEdges" />
+      <text x={left + width / 2} y={top + 19} textAnchor="middle">
+        {name}
+      </text>
+      <g transform={`translate(${left + 8} ${top + 6})`}>
+        <NextFlag />
+      </g>
+    </g>
   );
 }
 
