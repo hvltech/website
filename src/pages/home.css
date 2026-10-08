@@ -287,18 +287,13 @@
   letter-spacing: 3px;
   fill: var(--river-label);
 }
-.map-route {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3;
-  stroke-dasharray: 6 5;
+.map-road {
+  fill: var(--green);
+  opacity: 0.7;
 }
-.map-rail {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1.2;
-  stroke-dasharray: 3 2;
-  opacity: 0.55;
+.map-road.is-upcoming {
+  fill: var(--accent);
+  opacity: 1;
 }
 .map-rider {
   fill: var(--ink);
@@ -307,15 +302,6 @@
   font-family: "DM Mono", monospace;
   font-size: 8px;
   fill: var(--muted);
-}
-.town-number {
-  font-family: "VT323", monospace;
-  font-size: 15px;
-  fill: var(--ink);
-}
-.map-route.is-next {
-  stroke: var(--accent);
-  opacity: 1;
 }
 .route-reveal {
   fill: none;
@@ -340,22 +326,50 @@
   stroke-width: 5px;
   stroke-linejoin: round;
 }
+.map-town.is-done .town-dot {
+  fill: var(--green);
+  stroke: var(--green);
+}
+.town-check {
+  fill: var(--paper);
+}
+.map-town.is-planned .town-dot {
+  fill: var(--paper);
+  stroke: var(--muted);
+  stroke-width: 2;
+}
+.map-town.is-planned text {
+  font-size: 16px;
+  fill: var(--muted);
+}
+/* The next stop: a name badge pointing at the town, with the flag on top. */
 .map-town.is-next .town-dot {
   fill: var(--accent);
-  stroke: var(--accent);
+  stroke: var(--paper);
+  stroke-width: 2;
 }
-.map-town.is-next .town-number {
-  fill: var(--paper);
+.badge-plate {
+  fill: var(--card);
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.badge-shadow {
+  fill: var(--accent);
+  opacity: 0.35;
+}
+.map-town .next-badge text {
+  font-size: 20px;
+  fill: var(--accent);
+  stroke: none;
 }
 .map-stop-link {
   cursor: pointer;
 }
-.map-stop-link:hover .town-dot {
-  stroke: var(--ink);
-  stroke-width: 4;
+.map-stop-link:hover .badge-plate {
+  fill: var(--accent);
 }
-.map-stop-link text:not(.town-number) {
-  text-decoration: underline;
+.map-stop-link:hover .next-badge text {
+  fill: var(--paper);
 }
 .map-legend {
   font-family: "VT323", monospace;
@@ -839,8 +853,11 @@
   .map-town text {
     font-size: 27px;
   }
-  .map-town .town-number {
-    font-size: 15px;
+  .map-town.is-planned text {
+    font-size: 24px;
+  }
+  .next-badge {
+    transform: scale(1.35);
   }
   .hq-label {
     font-size: 32px;
@@ -853,7 +870,7 @@
   .map-berlin {
     font-size: 26px;
   }
-  .map-town.is-minor text:not(.town-number) {
+  .map-town.is-minor text {
     display: none;
   }
   .tour-map {
