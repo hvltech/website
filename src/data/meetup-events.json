@@ -1,13 +1,14 @@
 {
-  "fetchedAt": "2026-09-28T19:06:38.959Z",
+  "fetchedAt": "2026-10-08T06:21:19.324Z",
   "upcomingEvents": [
     {
-      "title": "HVLtech Dinner at Karyatis: Meze, side projects, and zero slides",
-      "dateTime": "2026-10-07T18:00:00",
-      "endTime": "2026-10-07T21:00:00",
-      "location": "",
-      "description": "After a bit of a break, we're back for another dinner together. Let's catch up on what's new while enjoying some Greek food at Karyatis in Falkensee. No talks, no agenda, just…",
-      "eventUrl": "https://www.meetup.com/havelland-technology-falkensee/events/316735836/"
+      "title": "HVLtech Dinner on Tour: Nauen",
+      "dateTime": "2026-11-18T18:00:00",
+      "endTime": "2026-11-18T21:00:00",
+      "location": "Gartenstraße 42, 14641 Nauen",
+      "description": "The dinner is going on tour, and the first stop is Nauen. Same idea as always: no talks, no agenda, just good food and good conversations, this time at Herr Dang Nauen. Engineer,…",
+      "eventUrl": "https://www.meetup.com/havelland-technology-falkensee/events/316881762/",
+      "mapUrl": "https://www.google.com/maps/search/?api=1&query=Gartenstra%C3%9Fe+42%2C+14641+Nauen%2C+Germany&query_place_id=ChIJszJVy4fjqEcRzv-RxstsHf8"
     }
   ]
 }

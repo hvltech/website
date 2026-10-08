@@ -14,6 +14,8 @@ interface MeetupEvent {
   location: string;
   description: string;
   eventUrl: string;
+  /** Google Maps link to the exact venue, when Meetup knows it. */
+  mapUrl?: string;
 }
 
 interface MeetupEventsData {
@@ -68,27 +70,62 @@ function resolveLocation(rawLocation: string, title: string): string {
   return DEFAULT_VENUE_BY_TITLE[title] || '';
 }
 
-// Meetup's iCal feed keeps cancelled events as STATUS:CONFIRMED, so the event page's
-// embedded Next.js data is the only public place the real status shows up. Any failure
-// here keeps the event rather than hiding a real one.
-async function isCancelledOnMeetup(eventUrl: string): Promise<boolean> {
+interface EventPage {
+  cancelled: boolean;
+  location?: string;
+  mapUrl?: string;
+}
+
+interface MeetupVenue {
+  name?: string;
+  address?: string;
+  googleMapsUrl?: string;
+}
+
+/** "Karyatis (Bahnhofstraße 1, 14612 Falkensee)", or just the address when the venue has no name of its own. */
+function venueLocation(venue: MeetupVenue): string | undefined {
+  const address = venue.address?.replace(/,\s*Germany$/, '').trim();
+  const name = venue.name?.trim();
+  if (!address) return name || undefined;
+  if (!name || address.startsWith(name)) return address;
+  return `${name} (${address})`;
+}
+
+/** Meetup's link searches for the venue name only; searching the full address keeps it right if the place id ever breaks. */
+function venueMapUrl(venue: MeetupVenue): string | undefined {
+  if (!venue.googleMapsUrl || !venue.address) return venue.googleMapsUrl;
+  const url = new URL(venue.googleMapsUrl);
+  url.searchParams.set('query', venue.address);
+  return url.toString();
+}
+
+// The iCal feed has neither the venue nor the real status (cancelled events stay
+// STATUS:CONFIRMED), so we read both from the event page's embedded Next.js data.
+// Any failure here keeps the event rather than hiding a real one.
+async function fetchEventPage(eventUrl: string): Promise<EventPage> {
   const id = eventUrl.match(/\/events\/([^/?]+)/)?.[1];
-  if (!id) return false;
+  if (!id) return { cancelled: false };
 
   try {
     const res = await fetch(eventUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; hvltech-site-build)' },
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) return false;
+    if (!res.ok) return { cancelled: false };
     const html = await res.text();
     const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (!match) return false;
+    if (!match) return { cancelled: false };
     const event = JSON.parse(match[1])?.props?.pageProps?.event;
-    return event?.id === id && typeof event.status === 'string' && event.status.startsWith('CANCELLED');
+    if (event?.id !== id) return { cancelled: false };
+    const venue: MeetupVenue | undefined = event.venue ?? undefined;
+    return {
+      cancelled: typeof event.status === 'string' && event.status.startsWith('CANCELLED'),
+      location: venue && venueLocation(venue),
+      mapUrl: venue && venueMapUrl(venue),
+    };
   } catch (error) {
-    console.warn(`Could not check status of ${eventUrl}:`, error);
-    return false;
+    console.warn(`Could not read event page ${eventUrl}:`, error);
+    return { cancelled: false };
   }
 }
 
@@ -128,10 +165,18 @@ async function fetchEvents(): Promise<void> {
       });
     }
 
-    const cancelled = await Promise.all(events.map((event) => isCancelledOnMeetup(event.eventUrl)));
-    const activeEvents = events.filter((event, i) => {
-      if (cancelled[i]) console.log(`Skipping cancelled event: ${event.title} (${event.dateTime})`);
-      return !cancelled[i];
+    const pages = await Promise.all(events.map((event) => fetchEventPage(event.eventUrl)));
+    const activeEvents = events.flatMap((event, i) => {
+      const page = pages[i];
+      if (page.cancelled) {
+        console.log(`Skipping cancelled event: ${event.title} (${event.dateTime})`);
+        return [];
+      }
+      return [{
+        ...event,
+        location: page.location || event.location,
+        ...(page.mapUrl && { mapUrl: page.mapUrl }),
+      }];
     });
 
     activeEvents.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());

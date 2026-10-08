@@ -7,6 +7,8 @@ export interface MeetupEvent {
     location: string;
     description: string;
     eventUrl: string;
+    /** Google Maps link to the exact venue, when Meetup knows it. */
+    mapUrl?: string;
 }
 
 const DEFAULT_VENUE_BY_TITLE: Record<string, string> = {
@@ -77,7 +79,7 @@ export function buildIcsUrl(event: MeetupEvent, location: string): string {
 
 /** Meetup events that haven't ended yet, soonest first. */
 export function upcomingEvents(): MeetupEvent[] {
-    return meetupData.upcomingEvents.filter(
+    return (meetupData.upcomingEvents as MeetupEvent[]).filter(
         (event) => new Date(event.endTime || event.dateTime).getTime() > Date.now(),
     );
 }

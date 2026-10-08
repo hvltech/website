@@ -60,7 +60,7 @@ function useEventCards(events: MeetupEvent[]): CardProps[] {
             contain: event.description,
             link: isKidsLabs ? undefined : (event.eventUrl || undefined),
             internalLink: isKidsLabs ? '/labs' : undefined,
-            mapUrl: buildMapUrl(venueName, address),
+            mapUrl: event.mapUrl ?? buildMapUrl(venueName, address),
             calendarUrl: buildCalendarUrl(event, venueName, address),
         };
     });

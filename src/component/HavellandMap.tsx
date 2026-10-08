@@ -21,11 +21,13 @@ type HavellandMapProps = {
   legend?: string;
   hqLabel: string;
   motion: boolean;
+  /** Stops with a scheduled dinner link to its Meetup page. */
+  links?: Partial<Record<TownId, { href: string; label: string }>>;
 };
 
 const route = tourPath();
 
-export default function HavellandMap({ label, nextStop, legend, hqLabel, motion }: HavellandMapProps) {
+export default function HavellandMap({ label, nextStop, legend, hqLabel, motion, links = {} }: HavellandMapProps) {
   const id = useId().replace(/:/g, "");
   const svg = useRef<SVGSVGElement>(null);
   const [hqX, hqY] = townPoint(HQ);
@@ -104,25 +106,36 @@ export default function HavellandMap({ label, nextStop, legend, hqLabel, motion 
         const town = towns.find((t) => t.id === stop.town)!;
         const [x, y] = townPoint(stop.town);
         const isNext = stop.town === nextStop;
+        const link = links[stop.town];
+        const marker = (
+          <g
+            className={`map-town ${isNext ? "is-next" : ""} ${town.minor && !isNext ? "is-minor" : ""}`}
+            style={{ animationDelay: `${1.2 + index * 0.14}s` }}
+          >
+            <rect x="-8" y="-8" width="16" height="16" className="town-dot" shapeRendering="crispEdges" />
+            <text className="town-number" y="4.5" textAnchor="middle">
+              {index + 1}
+            </text>
+            <text x={town.label.dx} y={town.label.dy} textAnchor={town.label.anchor}>
+              {town.name}
+            </text>
+            {isNext && (
+              <g transform="translate(4 -6)">
+                <NextFlag />
+              </g>
+            )}
+          </g>
+        );
         return (
           <g key={stop.town} transform={`translate(${x} ${y})`}>
-            <g
-              className={`map-town ${isNext ? "is-next" : ""} ${town.minor && !isNext ? "is-minor" : ""}`}
-              style={{ animationDelay: `${1.2 + index * 0.14}s` }}
-            >
-              <rect x="-8" y="-8" width="16" height="16" className="town-dot" shapeRendering="crispEdges" />
-              <text className="town-number" y="4.5" textAnchor="middle">
-                {index + 1}
-              </text>
-              <text x={town.label.dx} y={town.label.dy} textAnchor={town.label.anchor}>
-                {town.name}
-              </text>
-              {isNext && (
-                <g transform="translate(4 -6)">
-                  <NextFlag />
-                </g>
-              )}
-            </g>
+            {link ? (
+              // The tour list next to the map carries the same links for keyboards and screen readers.
+              <a className="map-stop-link" href={link.href} aria-label={link.label} tabIndex={-1}>
+                {marker}
+              </a>
+            ) : (
+              marker
+            )}
           </g>
         );
       })}
