@@ -125,6 +125,16 @@
   height: 15px;
   color: var(--green);
 }
+.next-place {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.next-place:hover,
+.next-place:focus-visible {
+  color: var(--green);
+  text-decoration-style: solid;
+}
 .next-actions {
   display: flex;
   flex-wrap: wrap;
@@ -336,6 +346,16 @@
 }
 .map-town.is-next .town-number {
   fill: var(--paper);
+}
+.map-stop-link {
+  cursor: pointer;
+}
+.map-stop-link:hover .town-dot {
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+.map-stop-link text:not(.town-number) {
+  text-decoration: underline;
 }
 .map-legend {
   font-family: "VT323", monospace;
@@ -557,6 +577,20 @@
   font-weight: 400;
   color: var(--ink);
   line-height: 1.05;
+}
+.tour-stops strong a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.tour-stops strong a::after {
+  content: " ↗";
+  font-size: 18px;
+}
+.tour-stops strong a:hover,
+.tour-stops strong a:focus-visible {
+  color: var(--accent);
 }
 .stop-fact {
   grid-area: fact;

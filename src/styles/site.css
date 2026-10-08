@@ -136,6 +136,14 @@
 .skip-link:focus {
   top: 10px;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .pixel-icon {
   width: 18px;
   height: 18px;

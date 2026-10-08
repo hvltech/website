@@ -7,11 +7,12 @@ import PhotoWall from "../component/PhotoWall";
 import PixelArt, { type SpriteName } from "../component/PixelArt";
 import SiteLayout, { EMAIL, FeedLinks, MEETUP_URL, PixelIcon } from "../component/site/SiteLayout";
 import pearLogo from "../assets/logo/logo_no_text.svg";
-import { HQ, findTown, tour, towns } from "../data/havelland";
+import { HQ, findTown, tour, towns, type TownId } from "../data/havelland";
 import { buildMailto } from "../utils/buildMailto";
 import {
   buildCalendarUrl,
   buildIcsUrl,
+  buildMapUrl,
   parseLocation,
   type MeetupEvent,
   upcomingEvents,
@@ -20,12 +21,13 @@ import { useSeo } from "../utils/useSeo";
 import { useTheme } from "../utils/theme";
 import "./home.css";
 
-
-
 function eventTown(event?: MeetupEvent) {
   if (!event) return undefined;
   return findTown(event.location) ?? findTown(event.title) ?? findTown(event.description);
 }
+
+/** Tour stops are dinners. A talk night or Programmiercafé in Falkensee isn't a tour stop. */
+const isDinner = (event: MeetupEvent) => /dinner/i.test(event.title);
 
 /** "> Next up▌" typed out like a terminal prompt when the page opens. */
 function TypedLabel({ text, motion }: { text: string; motion: boolean }) {
@@ -114,6 +116,7 @@ function NextEventCard({ event, lang, motion }: { event?: MeetupEvent; lang: str
   const { venueName, address } = parseLocation(event.location, event.title);
   const town = eventTown(event);
   const place = [venueName, address].filter(Boolean).join(", ") || town?.name || "";
+  const mapUrl = event.mapUrl ?? buildMapUrl(venueName, address);
   const time = (date: Date) =>
     new Intl.DateTimeFormat(lang === "de" ? "de" : "en-GB", { hour: "2-digit", minute: "2-digit" }).format(date);
 
@@ -140,7 +143,14 @@ function NextEventCard({ event, lang, motion }: { event?: MeetupEvent; lang: str
             {place && (
               <span>
                 <PixelIcon kind="pin" />
-                {place}
+                {mapUrl ? (
+                  <a className="next-place" href={mapUrl} target="_blank" rel="noopener noreferrer">
+                    {place}
+                    <span className="sr-only"> ({t("home.next.openMap")})</span>
+                  </a>
+                ) : (
+                  place
+                )}
               </span>
             )}
           </p>
@@ -169,10 +179,25 @@ export default function HomePage() {
 
   const { hash } = useLocation();
   const theme = useTheme();
-  const [next, ...later] = upcomingEvents();
-  const nextTown = eventTown(next);
   const shortDate = (value: string) =>
     new Intl.DateTimeFormat(lang, { day: "numeric", month: "short" }).format(new Date(value));
+  const upcoming = upcomingEvents();
+  const [next, ...later] = upcoming;
+  const dinners = upcoming.filter(isDinner);
+  const nextDinner = dinners[0];
+  const nextTown = eventTown(nextDinner);
+  // The first scheduled dinner in each town, so the tour can link straight to its Meetup page.
+  const stopEvents = new Map<TownId, MeetupEvent>();
+  for (const dinner of dinners) {
+    const town = eventTown(dinner);
+    if (town && !stopEvents.has(town.id)) stopEvents.set(town.id, dinner);
+  }
+  const stopLinks = Object.fromEntries(
+    [...stopEvents].map(([town, event]) => [
+      town,
+      { href: event.eventUrl, label: `${event.title}, ${shortDate(event.dateTime)} (Meetup)` },
+    ]),
+  );
   const monthLabel = (month: string) =>
     new Intl.DateTimeFormat(lang, { month: "long", year: "numeric" }).format(new Date(`${month}-01T12:00:00`));
   const about = t("home.hero.about", { returnObjects: true }) as AboutItem[];
@@ -309,7 +334,8 @@ export default function HomePage() {
             <HavellandMap
               label={t("home.tour.mapLabel")}
               nextStop={nextTown?.id}
-              legend={nextTown && next ? `${t("home.tour.legend")}: ${nextTown.name} · ${shortDate(next.dateTime)}` : undefined}
+              legend={nextTown && nextDinner ? `${t("home.tour.legend")}: ${nextTown.name} · ${shortDate(nextDinner.dateTime)}` : undefined}
+              links={stopLinks}
               hqLabel={t("home.tour.hq")}
               motion={motion}
             />
@@ -319,15 +345,25 @@ export default function HomePage() {
               const town = towns.find((candidate) => candidate.id === stop.town)!;
               const isNext = stop.town === nextTown?.id;
               const isHq = stop.town === HQ;
+              const event = stopEvents.get(stop.town);
               return (
                 <li key={stop.town} className={`${isNext ? "is-next" : ""} ${isHq ? "is-hq" : ""}`}>
                   <span className="stop-number" aria-hidden="true">
                     {isHq ? <img src={pearLogo} alt="" /> : index + 1}
                   </span>
                   <span className="stop-month">
-                    {isNext && next ? shortDate(next.dateTime) : monthLabel(stop.month)}
+                    {event ? shortDate(event.dateTime) : monthLabel(stop.month)}
                   </span>
-                  <strong>{town.name}</strong>
+                  <strong>
+                    {event ? (
+                      <a href={event.eventUrl}>
+                        {town.name}
+                        <span className="sr-only"> ({t("home.tour.onMeetup")})</span>
+                      </a>
+                    ) : (
+                      town.name
+                    )}
+                  </strong>
                   <span className="stop-fact">{t(`home.tour.facts.${stop.town}`)}</span>
                   <span className="stop-tag">
                     {isNext ? t("home.tour.next") : isHq ? t("home.tour.home") : t("home.tour.planned")}
